@@ -25,13 +25,25 @@ class MediaPickerBottomSheet extends StatelessWidget {
             // Header
             Padding(
               padding: EdgeInsets.all(16),
-              child: Text(
-                'Add Media',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+              child: Column(
+                children: [
+                  Text(
+                    'Add Media',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Files will be secured & hidden from gallery',
+                    style: TextStyle(
+                      color: Colors.white60,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ),
 
@@ -42,15 +54,23 @@ class MediaPickerBottomSheet extends StatelessWidget {
               context,
               icon: Icons.photo_library_rounded,
               title: 'Choose from Gallery',
-              subtitle: 'Select images from your gallery',
+              subtitle: 'Select images (copies)',
               onTap: () => _pickFromGallery(context),
+            ),
+
+            _buildOptionTile(
+              context,
+              icon: Icons.collections_rounded,
+              title: 'Choose Multiple Media',
+              subtitle: 'Select & remove from gallery',
+              onTap: () => _pickMultipleMedia(context),
             ),
 
             _buildOptionTile(
               context,
               icon: Icons.video_library_rounded,
               title: 'Choose Video',
-              subtitle: 'Select videos from your gallery',
+              subtitle: 'Select videos (copies)',
               onTap: () => _pickVideo(context),
             ),
 
@@ -113,6 +133,107 @@ class MediaPickerBottomSheet extends StatelessWidget {
           content: Text('Failed to add image'),
           backgroundColor: Colors.red,
           duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  void _pickMultipleMedia(BuildContext context) async {
+    // Get provider reference before closing dialog
+    final mediaProvider = Provider.of<MediaProvider>(context, listen: false);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    Navigator.pop(context);
+
+    try {
+      // Show inline snackbar notification instead of blocking dialog
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text('Securing & hiding media files...'),
+              ),
+            ],
+          ),
+          duration: Duration(hours: 1), // Keep visible during processing
+          backgroundColor: Color(0xFF4361EE),
+        ),
+      );
+
+      final count = await mediaProvider.addMultipleMediaWithDeletion(folderId, context);
+      
+      // Hide the progress snackbar
+      scaffoldMessenger.hideCurrentSnackBar();
+      
+      if (count > 0) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '$count file${count > 1 ? 's' : ''} secured!',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      Text(
+                        'Secured & removed from gallery',
+                        style: TextStyle(fontSize: 12, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      } else {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('No media selected'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      // Hide the progress snackbar
+      scaffoldMessenger.hideCurrentSnackBar();
+      
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text('Some files failed to save or delete'),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
         ),
       );
     }

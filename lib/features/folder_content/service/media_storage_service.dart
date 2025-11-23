@@ -10,6 +10,8 @@ import 'package:permission_handler/permission_handler.dart';
 import '../models/media_item.dart';
 
 class MediaStorageService {
+  static const platform = MethodChannel('com.example.locker/media_scanner');
+
   // Save media file to secure storage
   Future<MediaItem> saveMediaFile(
     File originalFile,
@@ -18,6 +20,8 @@ class MediaStorageService {
     String originalName,
   ) async {
     try {
+      debugPrint('📂 Starting to save media file: $originalName');
+      
       // Get application documents directory
       final Directory appDir = await getApplicationDocumentsDirectory();
       final String secureDirPath = '${appDir.path}/secure_media/$folderId';
@@ -25,6 +29,7 @@ class MediaStorageService {
 
       if (!await secureDir.exists()) {
         await secureDir.create(recursive: true);
+        debugPrint('✅ Created secure directory: $secureDirPath');
       }
 
       // Generate unique filename
@@ -35,9 +40,15 @@ class MediaStorageService {
 
       // Copy file to secure location
       await originalFile.copy(newFilePath);
+      debugPrint('✅ Copied file to secure location: $newFilePath');
 
       // Delete original file from gallery to hide it
-      await _deleteOriginalFile(originalFile);
+      final bool deleted = await _deleteOriginalFileFromGallery(originalFile);
+      if (deleted) {
+        debugPrint('✅ Successfully deleted original file from gallery');
+      } else {
+        debugPrint('⚠️ Could not delete original file, but it may be a cache file');
+      }
 
       // Get file info
       final File newFile = File(newFilePath);
@@ -71,9 +82,10 @@ class MediaStorageService {
       // Hide from gallery (create .nomedia file)
       await _createNoMediaFile(secureDirPath);
 
+      debugPrint('✅ Media file saved successfully: ${mediaItem.name}');
       return mediaItem;
     } catch (e) {
-      debugPrint('Error saving media file: $e');
+      debugPrint('❌ Error saving media file: $e');
       rethrow;
     }
   }
@@ -96,52 +108,139 @@ class MediaStorageService {
       final File noMediaFile = File('$directoryPath/.nomedia');
       if (!await noMediaFile.exists()) {
         await noMediaFile.create();
+        debugPrint('✅ Created .nomedia file in: $directoryPath');
       }
     } catch (e) {
       debugPrint('Error creating .nomedia file: $e');
     }
   }
 
-  // Delete original file from gallery
-  Future<void> _deleteOriginalFile(File originalFile) async {
+  // Delete original file from gallery - IMPORTANT NOTES:
+  // 
+  // ⚠️ ANDROID SCOPED STORAGE LIMITATION:
+  // On Android 10+ (API 29+), image_picker returns CACHED COPIES of files, not originals.
+  // This means:
+  // 1. When user picks from gallery → Android creates a temp copy in cache
+  // 2. We can delete this cache copy ✅
+  // 3. BUT the original file REMAINS in the gallery ❌
+  // 
+  // WHY: Android's Scoped Storage security model prevents direct file access
+  // 
+  // SOLUTIONS (for future implementation):
+  // 1. Use file_picker with proper permissions (complex)
+  // 2. Ask user to manually delete from gallery
+  // 3. Clearly communicate that files are "secured/copied" not "moved"
+  // 
+  // CURRENT BEHAVIOR:
+  // - Deletes cache files ✅
+  // - Creates secure copy in app ✅
+  // - Hides app folder from gallery (.nomedia) ✅
+  // - Original gallery files remain (by Android design) ℹ️
+  //
+  Future<bool> _deleteOriginalFileFromGallery(File originalFile) async {
     try {
       final String filePath = originalFile.path;
+      debugPrint('🗑️ Attempting to delete: $filePath');
       
       // Check if this is a cached file (from image_picker) or an actual gallery file
-      if (filePath.contains('/cache/')) {
+      if (filePath.contains('/cache/') || 
+          filePath.contains('image_picker') || 
+          filePath.contains('scaled_')) {
         // This is a temporary cache file, just delete it
         if (await originalFile.exists()) {
           await originalFile.delete();
           debugPrint('✅ Deleted cache file: $filePath');
         }
-        return;
+        return true;
       }
 
-      // For actual gallery files, request permissions first
+      // For actual gallery files on Android
       if (Platform.isAndroid) {
-        // Request storage permissions
-        var status = await Permission.manageExternalStorage.status;
-        if (!status.isGranted) {
-          // Try to request permission
-          status = await Permission.manageExternalStorage.request();
-          if (!status.isGranted) {
-            debugPrint('⚠️ Storage permission not granted');
-            return;
+        // Request necessary permissions
+        bool permissionGranted = await _requestStoragePermissions();
+        
+        if (!permissionGranted) {
+          debugPrint('⚠️ Storage permission not granted');
+          // Still try to delete the file even without permission
+        }
+
+        // Use native method to delete from gallery
+        try {
+          final bool nativeDeleteSuccess = await platform.invokeMethod(
+            'deleteFromGallery',
+            {'path': filePath},
+          );
+          
+          if (nativeDeleteSuccess) {
+            debugPrint('✅ Successfully deleted from gallery via native code');
+            return true;
           }
+        } catch (e) {
+          debugPrint('⚠️ Native delete failed: $e');
+        }
+
+        // Fallback: Try direct file deletion
+        if (await originalFile.exists()) {
+          try {
+            await originalFile.delete();
+            debugPrint('✅ Deleted file directly: $filePath');
+            
+            // Trigger media scan to update gallery
+            await _refreshMediaGallery(filePath);
+            return true;
+          } catch (e) {
+            debugPrint('⚠️ Could not delete file: $e');
+          }
+        }
+      } else if (Platform.isIOS) {
+        // iOS handles this differently - files picked from gallery are copies
+        if (await originalFile.exists()) {
+          await originalFile.delete();
+          debugPrint('✅ Deleted iOS temp file: $filePath');
+          return true;
         }
       }
 
-      // Try to delete the file
-      if (await originalFile.exists()) {
-        await originalFile.delete();
-        debugPrint('✅ Deleted original file from gallery: $filePath');
-        
-        // Refresh the media scanner
-        await _refreshMediaGallery(filePath);
-      }
+      return false;
     } catch (e) {
-      debugPrint('⚠️ Warning: Could not delete original file: $e');
-      // Don't throw - the file is already copied to secure storage
+      debugPrint('❌ Error in _deleteOriginalFileFromGallery: $e');
+      return false;
+    }
+  }
+
+  // Request storage permissions
+  Future<bool> _requestStoragePermissions() async {
+    try {
+      if (Platform.isAndroid) {
+        // For Android 13+ (API 33+)
+        if (await Permission.photos.isGranted || 
+            await Permission.videos.isGranted) {
+          return true;
+        }
+        
+        // Request media permissions
+        Map<Permission, PermissionStatus> statuses = await [
+          Permission.photos,
+          Permission.videos,
+        ].request();
+        
+        bool allGranted = statuses.values.every((status) => status.isGranted);
+        
+        if (!allGranted) {
+          // Try MANAGE_EXTERNAL_STORAGE for Android 11+
+          var manageStatus = await Permission.manageExternalStorage.status;
+          if (!manageStatus.isGranted) {
+            manageStatus = await Permission.manageExternalStorage.request();
+          }
+          return manageStatus.isGranted;
+        }
+        
+        return allGranted;
+      }
+      return true; // iOS doesn't need explicit permission for this
+    } catch (e) {
+      debugPrint('⚠️ Error requesting permissions: $e');
+      return false;
     }
   }
 
@@ -149,16 +248,34 @@ class MediaStorageService {
   Future<void> _refreshMediaGallery(String filePath) async {
     try {
       if (Platform.isAndroid) {
-        // Use MediaScannerConnection to update the gallery
-        const platform = MethodChannel('com.example.locker/media_scanner');
         await platform.invokeMethod('scanFile', {'path': filePath});
         debugPrint('📱 Media gallery refreshed for: $filePath');
-      } else if (Platform.isIOS) {
-        // iOS automatically updates the Photos app
-        debugPrint('📱 iOS gallery auto-refreshes');
       }
     } catch (e) {
       debugPrint('⚠️ Could not refresh media gallery: $e');
+    }
+  }
+
+  // Delete media file by URI (for file_picker approach)
+  Future<bool> deleteMediaByUri(String uri) async {
+    try {
+      if (Platform.isAndroid) {
+        debugPrint('🗑️ Deleting media by URI: $uri');
+        final bool success = await platform.invokeMethod(
+          'deleteMediaByUri',
+          {'uri': uri},
+        );
+        if (success) {
+          debugPrint('✅ Successfully deleted from gallery via URI');
+        } else {
+          debugPrint('⚠️ Failed to delete via URI');
+        }
+        return success;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('❌ Error deleting media by URI: $e');
+      return false;
     }
   }
 
@@ -265,49 +382,36 @@ class MediaStorageService {
         return false;
       }
 
-      // Get appropriate directory based on media type
-      Directory? targetDir;
-      if (mediaItem.type == MediaType.image) {
-        targetDir = Directory('/storage/emulated/0/DCIM/Restored');
-      } else if (mediaItem.type == MediaType.video) {
-        targetDir = Directory('/storage/emulated/0/DCIM/Restored');
-      }
+      // Request permissions
+      await _requestStoragePermissions();
 
-      if (targetDir != null) {
-        // Create directory if it doesn't exist
-        if (!await targetDir.exists()) {
-          await targetDir.create(recursive: true);
+      // Use platform-specific restoration
+      if (Platform.isAndroid) {
+        // Copy to DCIM/Restored directory
+        final Directory dcimDir = Directory('/storage/emulated/0/DCIM/Restored');
+        if (!await dcimDir.exists()) {
+          await dcimDir.create(recursive: true);
         }
 
-        // Copy file to gallery
-        final String targetPath = '${targetDir.path}/${mediaItem.name}';
+        final String targetPath = '${dcimDir.path}/${mediaItem.name}';
         await sourceFile.copy(targetPath);
 
-        // Trigger media scan to make it visible in gallery immediately
-        await _scanMediaFile(targetPath);
-
-        debugPrint('✅ Restored to gallery: ${mediaItem.name}');
+        // Trigger media scan
+        await platform.invokeMethod('scanFile', {'path': targetPath});
+        
+        debugPrint('✅ Restored to Android gallery: ${mediaItem.name}');
         return true;
+      } else if (Platform.isIOS) {
+        // For iOS, we would need to use Photos framework
+        // This is a simplified version
+        debugPrint('⚠️ iOS restoration needs Photos framework implementation');
+        return false;
       }
 
       return false;
     } catch (e) {
-      debugPrint('Error restoring media to gallery: $e');
+      debugPrint('❌ Error restoring media to gallery: $e');
       return false;
-    }
-  }
-
-  // Scan media file to make it visible in gallery
-  Future<void> _scanMediaFile(String filePath) async {
-    try {
-      if (Platform.isAndroid) {
-        // On Android, trigger media scanner
-        debugPrint('📱 Scanning file for gallery: $filePath');
-        // Note: In production, use a plugin like media_scanner or gallery_saver
-        // For now, the file will appear after gallery refresh
-      }
-    } catch (e) {
-      debugPrint('Warning: Could not scan media file: $e');
     }
   }
 

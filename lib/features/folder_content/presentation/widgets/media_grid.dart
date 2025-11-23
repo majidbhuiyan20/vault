@@ -24,20 +24,25 @@ class MediaGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GridView.builder(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.all(12),
+      physics: BouncingScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        childAspectRatio: 0.8,
+        crossAxisSpacing: 6,
+        mainAxisSpacing: 6,
+        childAspectRatio: 0.75,
       ),
       itemCount: mediaItems.length,
       itemBuilder: (context, index) {
-        return MediaGridItem(
-          mediaItem: mediaItems[index],
-          isSelectionMode: isSelectionMode,
-          isSelected: selectedItems.contains(mediaItems[index].id),
-          onSelectionTap: onItemTap,
+        return AnimatedSwitcher(
+          duration: Duration(milliseconds: 300),
+          child: MediaGridItem(
+            key: ValueKey(mediaItems[index].id),
+            mediaItem: mediaItems[index],
+            isSelectionMode: isSelectionMode,
+            isSelected: selectedItems.contains(mediaItems[index].id),
+            onSelectionTap: onItemTap,
+          ),
         );
       },
     );
@@ -71,52 +76,119 @@ class MediaGridItem extends StatelessWidget {
       onLongPress: isSelectionMode
           ? null
           : () => _showDeleteDialog(context, mediaItem),
-      child: Stack(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color: Colors.white10,
-              border: isSelected
-                  ? Border.all(color: Colors.blue, width: 3)
-                  : null,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: Offset(0, 4),
-                ),
-              ],
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: Colors.white.withOpacity(0.05),
+          border: isSelected
+              ? Border.all(color: Color(0xFF4361EE), width: 3)
+              : null,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 8,
+              offset: Offset(0, 2),
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: _buildMediaContent(),
-            ),
-          ),
-          // Selection indicator
-          if (isSelectionMode)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? Colors.blue
-                      : Colors.white.withOpacity(0.7),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: isSelected ? Colors.blue : Colors.white,
-                    width: 2,
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Stack(
+            children: [
+              // Media content
+              Positioned.fill(
+                child: _buildMediaContent(),
+              ),
+              
+              // Gradient overlay for better text visibility
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withOpacity(0.3),
+                      ],
+                    ),
                   ),
                 ),
-                child: isSelected
-                    ? Icon(Icons.check, color: Colors.white, size: 18)
-                    : null,
               ),
-            ),
-        ],
+              
+              // Selection indicator
+              if (isSelectionMode)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: AnimatedContainer(
+                    duration: Duration(milliseconds: 200),
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? Color(0xFF4361EE)
+                          : Colors.white.withOpacity(0.8),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isSelected ? Color(0xFF4361EE) : Colors.white,
+                        width: 2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: isSelected
+                        ? Icon(Icons.check, color: Colors.white, size: 18)
+                        : null,
+                  ),
+                ),
+              
+              // File type indicator
+              if (!isSelectionMode)
+                Positioned(
+                  bottom: 6,
+                  left: 6,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          mediaItem.type == MediaType.video
+                              ? Icons.videocam_rounded
+                              : Icons.image_rounded,
+                          color: Colors.white,
+                          size: 12,
+                        ),
+                        if (mediaItem.type == MediaType.video &&
+                            mediaItem.duration != null) ...[
+                          SizedBox(width: 4),
+                          Text(
+                            _formatDuration(mediaItem.duration!),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -139,39 +211,18 @@ class MediaGridItem extends StatelessWidget {
             // Play button overlay
             Center(
               child: Container(
-                padding: EdgeInsets.all(12),
+                padding: EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.6),
+                  color: Colors.black.withOpacity(0.5),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   Icons.play_arrow_rounded,
                   color: Colors.white,
-                  size: 32,
+                  size: 28,
                 ),
               ),
             ),
-            // Duration badge
-            if (mediaItem.duration != null)
-              Positioned(
-                bottom: 8,
-                right: 8,
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.7),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    _formatDuration(mediaItem.duration!),
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
           ],
         );
       case MediaType.document:

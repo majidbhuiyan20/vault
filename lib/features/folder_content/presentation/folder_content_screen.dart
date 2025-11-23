@@ -166,41 +166,52 @@ class _FolderContentScreenState extends State<FolderContentScreen> {
     return Scaffold(
       backgroundColor: Color(0xFF0F0F1E),
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+        backgroundColor: _isSelectionMode 
+            ? Color(0xFF1A1A2E)
+            : Colors.transparent,
+        elevation: _isSelectionMode ? 4 : 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: Colors.white70),
+          icon: Icon(Icons.arrow_back_rounded, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: _isSelectionMode
-            ? Text(
-                '${_selectedItems.length} selected',
-                style: TextStyle(color: Colors.white, fontSize: 18),
-              )
-            : Consumer<MediaProvider>(
-                builder: (context, mediaProvider, child) {
-                  final itemCount = mediaProvider.getFolderItemCount(
-                    widget.category.id,
-                  );
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.category.title,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
+        title: AnimatedSwitcher(
+          duration: Duration(milliseconds: 300),
+          child: _isSelectionMode
+              ? Text(
+                  '${_selectedItems.length} selected',
+                  key: ValueKey('selection'),
+                  style: TextStyle(color: Colors.white, fontSize: 18),
+                )
+              : Consumer<MediaProvider>(
+                  key: ValueKey('normal'),
+                  builder: (context, mediaProvider, child) {
+                    final itemCount = mediaProvider.getFolderItemCount(
+                      widget.category.id,
+                    );
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.category.title,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 20,
+                          ),
                         ),
-                      ),
-                      Text(
-                        '$itemCount items',
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
-                      ),
-                    ],
-                  );
-                },
-              ),
+                        Text(
+                          '$itemCount item${itemCount != 1 ? 's' : ''}',
+                          style: TextStyle(
+                            color: Colors.white60,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+        ),
         actions: _isSelectionMode
             ? [
                 // Select All / Deselect All
