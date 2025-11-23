@@ -46,7 +46,9 @@ class HomeCategory {
       title: json['title'],
       icon: IconData(json['icon'], fontFamily: 'MaterialIcons'),
       color: Color(json['color']),
-      gradient: (json['gradient'] as List).map((colorValue) => Color(colorValue)).toList(),
+      gradient: (json['gradient'] as List)
+          .map((colorValue) => Color(colorValue))
+          .toList(),
       count: json['count'],
       type: json['type'],
       createdAt: DateTime.fromMillisecondsSinceEpoch(json['createdAt']),

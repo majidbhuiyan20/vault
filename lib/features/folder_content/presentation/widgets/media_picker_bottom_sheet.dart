@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../provider/media_provider.dart';
 
-
 class MediaPickerBottomSheet extends StatelessWidget {
   final String folderId;
 
@@ -71,12 +70,12 @@ class MediaPickerBottomSheet extends StatelessWidget {
   }
 
   Widget _buildOptionTile(
-      BuildContext context, {
-        required IconData icon,
-        required String title,
-        required String subtitle,
-        required VoidCallback onTap,
-      }) {
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
     return ListTile(
       leading: Container(
         padding: EdgeInsets.all(12),
@@ -93,53 +92,79 @@ class MediaPickerBottomSheet extends StatelessWidget {
   }
 
   void _pickFromGallery(BuildContext context) async {
+    // Get provider reference before closing dialog
+    final mediaProvider = Provider.of<MediaProvider>(context, listen: false);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
     Navigator.pop(context);
+
     try {
-      final mediaProvider = Provider.of<MediaProvider>(context, listen: false);
       await mediaProvider.addImageFromGallery(folderId, context);
-      _showSuccessSnackbar(context, 'Image added successfully');
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('Image secured successfully'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
     } catch (e) {
-      _showErrorSnackbar(context, 'Failed to add image');
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('Failed to add image'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 
   void _pickVideo(BuildContext context) async {
+    // Get provider reference before closing dialog
+    final mediaProvider = Provider.of<MediaProvider>(context, listen: false);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
     Navigator.pop(context);
+
     try {
-      final mediaProvider = Provider.of<MediaProvider>(context, listen: false);
       await mediaProvider.addVideoFromGallery(folderId, context);
-      _showSuccessSnackbar(context, 'Video added successfully');
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('Video secured and hidden from gallery'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
-      _showErrorSnackbar(context, 'Failed to add video');
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('Failed to add video'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
   void _takePhoto(BuildContext context) async {
+    // Get provider reference before closing dialog
+    final mediaProvider = Provider.of<MediaProvider>(context, listen: false);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
     Navigator.pop(context);
+
     try {
-      final mediaProvider = Provider.of<MediaProvider>(context, listen: false);
       await mediaProvider.takePhoto(folderId, context);
-      _showSuccessSnackbar(context, 'Photo taken successfully');
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('Photo captured and secured'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
-      _showErrorSnackbar(context, 'Failed to take photo');
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('Failed to take photo'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
-  }
-
-  void _showSuccessSnackbar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-      ),
-    );
-  }
-
-  void _showErrorSnackbar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
-    );
   }
 }

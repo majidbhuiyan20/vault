@@ -6,10 +6,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 class LocalStorageService {
   static const String _customFoldersKey = 'custom_folders';
 
-  static Future<SharedPreferences> get _prefs async => await SharedPreferences.getInstance();
+  static Future<SharedPreferences> get _prefs async =>
+      await SharedPreferences.getInstance();
 
   // Save custom folders
-  static Future<bool> saveCustomFolders(List<Map<String, dynamic>> folders) async {
+  static Future<bool> saveCustomFolders(
+    List<Map<String, dynamic>> folders,
+  ) async {
     try {
       final prefs = await _prefs;
       final String encodedData = json.encode(folders);

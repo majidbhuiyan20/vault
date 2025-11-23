@@ -1,5 +1,4 @@
 // lib/features/home/provider/home_provider.dart
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/home_category.dart';
 import '../services/local_storage_service.dart';
@@ -125,7 +124,10 @@ class HomeProvider with ChangeNotifier {
   }
 
   // Create new folder with color selection
-  Future<void> createNewFolder(String folderName, ColorOption colorOption) async {
+  Future<void> createNewFolder(
+    String folderName,
+    ColorOption colorOption,
+  ) async {
     final newFolder = HomeCategory(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: folderName,
@@ -144,7 +146,11 @@ class HomeProvider with ChangeNotifier {
   }
 
   // Update folder
-  Future<void> updateFolder(String folderId, String newName, ColorOption colorOption) async {
+  Future<void> updateFolder(
+    String folderId,
+    String newName,
+    ColorOption colorOption,
+  ) async {
     final index = _customFolders.indexWhere((folder) => folder.id == folderId);
     if (index != -1) {
       _customFolders[index] = _customFolders[index].copyWith(
@@ -160,16 +166,23 @@ class HomeProvider with ChangeNotifier {
   // Update folder count from media provider
   void updateFolderCount(String folderId, int newCount) {
     // Update custom folders
-    final customFolderIndex = _customFolders.indexWhere((folder) => folder.id == folderId);
+    final customFolderIndex = _customFolders.indexWhere(
+      (folder) => folder.id == folderId,
+    );
     if (customFolderIndex != -1) {
-      _customFolders[customFolderIndex] = _customFolders[customFolderIndex].copyWith(count: newCount);
+      _customFolders[customFolderIndex] = _customFolders[customFolderIndex]
+          .copyWith(count: newCount);
       _saveCustomFolders();
     }
     // Update default categories
     else {
-      final categoryIndex = _categories.indexWhere((folder) => folder.id == folderId);
+      final categoryIndex = _categories.indexWhere(
+        (folder) => folder.id == folderId,
+      );
       if (categoryIndex != -1) {
-        _categories[categoryIndex] = _categories[categoryIndex].copyWith(count: newCount);
+        _categories[categoryIndex] = _categories[categoryIndex].copyWith(
+          count: newCount,
+        );
       }
     }
     notifyListeners();
@@ -209,9 +222,13 @@ class HomeProvider with ChangeNotifier {
   // Save to local storage
   Future<void> _saveCustomFolders() async {
     try {
-      final foldersData = _customFolders.map((folder) => folder.toJson()).toList();
+      final foldersData = _customFolders
+          .map((folder) => folder.toJson())
+          .toList();
       await LocalStorageService.saveCustomFolders(foldersData);
-      debugPrint('✅ Saved ${_customFolders.length} custom folders to local storage');
+      debugPrint(
+        '✅ Saved ${_customFolders.length} custom folders to local storage',
+      );
     } catch (e) {
       debugPrint('❌ Error saving custom folders: $e');
     }
@@ -233,9 +250,10 @@ class HomeProvider with ChangeNotifier {
 
   // Check if folder name already exists (excluding current folder)
   bool isFolderNameExists(String folderName, {String? excludeFolderId}) {
-    return allFolders.any((folder) =>
-    folder.title.toLowerCase() == folderName.toLowerCase() &&
-        folder.id != excludeFolderId
+    return allFolders.any(
+      (folder) =>
+          folder.title.toLowerCase() == folderName.toLowerCase() &&
+          folder.id != excludeFolderId,
     );
   }
 }

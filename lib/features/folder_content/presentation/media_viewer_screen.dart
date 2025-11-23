@@ -2,7 +2,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
+import 'package:locker/features/folder_content/presentation/widgets/custom_video_player.dart';
 import '../models/media_item.dart';
 
 class MediaViewerScreen extends StatefulWidget {
@@ -22,35 +22,17 @@ class MediaViewerScreen extends StatefulWidget {
 class _MediaViewerScreenState extends State<MediaViewerScreen> {
   late PageController _pageController;
   late int _currentIndex;
-  VideoPlayerController? _videoController;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: widget.initialIndex);
-    _initializeVideoIfNeeded();
-  }
-
-  void _initializeVideoIfNeeded() {
-    final currentMedia = widget.mediaItems[_currentIndex];
-    if (currentMedia.type == MediaType.video) {
-      _initializeVideoPlayer(currentMedia.filePath);
-    }
-  }
-
-  void _initializeVideoPlayer(String videoPath) {
-    _videoController?.dispose();
-    _videoController = VideoPlayerController.file(File(videoPath))
-      ..initialize().then((_) {
-        setState(() {});
-      });
   }
 
   @override
   void dispose() {
     _pageController.dispose();
-    _videoController?.dispose();
     super.dispose();
   }
 
@@ -69,9 +51,6 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
           '${_currentIndex + 1} / ${widget.mediaItems.length}',
           style: TextStyle(color: Colors.white),
         ),
-        actions: [
-          if (_videoController != null) _buildVideoControls(),
-        ],
       ),
       body: SafeArea(
         child: Column(
@@ -83,9 +62,6 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
                 onPageChanged: (index) {
                   setState(() {
                     _currentIndex = index;
-                    _videoController?.dispose();
-                    _videoController = null;
-                    _initializeVideoIfNeeded();
                   });
                 },
                 itemBuilder: (context, index) {
@@ -114,59 +90,27 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
               fit: BoxFit.contain,
               errorBuilder: (context, error, stackTrace) {
                 return Center(
-                  child: Icon(Icons.error_rounded,
-                      color: Colors.white54, size: 64),
+                  child: Icon(
+                    Icons.error_rounded,
+                    color: Colors.white54,
+                    size: 64,
+                  ),
                 );
               },
             ),
           ),
         );
       case MediaType.video:
-        return _buildVideoPlayer();
+        return CustomVideoPlayer(videoPath: mediaItem.filePath);
       case MediaType.document:
         return Center(
-          child: Icon(Icons.description_rounded,
-              color: Colors.white54, size: 64),
+          child: Icon(
+            Icons.description_rounded,
+            color: Colors.white54,
+            size: 64,
+          ),
         );
     }
-  }
-
-  Widget _buildVideoPlayer() {
-    if (_videoController == null || !_videoController!.value.isInitialized) {
-      return Center(
-        child: CircularProgressIndicator(color: Colors.white),
-      );
-    }
-
-    return AspectRatio(
-      aspectRatio: _videoController!.value.aspectRatio,
-      child: VideoPlayer(_videoController!),
-    );
-  }
-
-  Widget _buildVideoControls() {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          icon: Icon(
-            _videoController!.value.isPlaying
-                ? Icons.pause_rounded
-                : Icons.play_arrow_rounded,
-            color: Colors.white,
-          ),
-          onPressed: () {
-            setState(() {
-              if (_videoController!.value.isPlaying) {
-                _videoController!.pause();
-              } else {
-                _videoController!.play();
-              }
-            });
-          },
-        ),
-      ],
-    );
   }
 
   Widget _buildBottomInfo() {
@@ -174,7 +118,16 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
 
     return Container(
       padding: EdgeInsets.all(16),
-      color: Colors.black.withOpacity(0.7),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.7),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 10,
+            offset: Offset(0, -2),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -189,18 +142,40 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          SizedBox(height: 4),
-          Text(
-            _getMediaInfo(mediaItem),
-            style: TextStyle(color: Colors.white70, fontSize: 12),
+          SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(
+                _getMediaIcon(mediaItem.type),
+                color: Colors.white70,
+                size: 16,
+              ),
+              SizedBox(width: 8),
+              Text(
+                _getMediaInfo(mediaItem),
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
+  IconData _getMediaIcon(MediaType type) {
+    switch (type) {
+      case MediaType.image:
+        return Icons.photo_rounded;
+      case MediaType.video:
+        return Icons.videocam_rounded;
+      case MediaType.document:
+        return Icons.description_rounded;
+    }
+  }
+
   String _getMediaInfo(MediaItem mediaItem) {
-    final date = '${mediaItem.createdDate.day}/${mediaItem.createdDate.month}/${mediaItem.createdDate.year}';
+    final date =
+        '${mediaItem.createdDate.day}/${mediaItem.createdDate.month}/${mediaItem.createdDate.year}';
 
     switch (mediaItem.type) {
       case MediaType.image:
@@ -216,8 +191,8 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
   }
 
   String _formatDuration(Duration duration) {
-    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final minutes = duration.inMinutes.toString().padLeft(2, '0');
     final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '${duration.inMinutes}:$seconds';
+    return '$minutes:$seconds';
   }
 }

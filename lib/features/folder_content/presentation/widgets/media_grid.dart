@@ -6,10 +6,20 @@ import 'package:provider/provider.dart';
 import '../../models/media_item.dart';
 import '../../provider/media_provider.dart';
 import '../media_viewer_screen.dart';
+
 class MediaGrid extends StatelessWidget {
   final List<MediaItem> mediaItems;
+  final bool isSelectionMode;
+  final Set<String> selectedItems;
+  final Function(String)? onItemTap;
 
-  const MediaGrid({super.key, required this.mediaItems});
+  const MediaGrid({
+    super.key,
+    required this.mediaItems,
+    this.isSelectionMode = false,
+    this.selectedItems = const {},
+    this.onItemTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +33,12 @@ class MediaGrid extends StatelessWidget {
       ),
       itemCount: mediaItems.length,
       itemBuilder: (context, index) {
-        return MediaGridItem(mediaItem: mediaItems[index]);
+        return MediaGridItem(
+          mediaItem: mediaItems[index],
+          isSelectionMode: isSelectionMode,
+          isSelected: selectedItems.contains(mediaItems[index].id),
+          onSelectionTap: onItemTap,
+        );
       },
     );
   }
@@ -31,30 +46,77 @@ class MediaGrid extends StatelessWidget {
 
 class MediaGridItem extends StatelessWidget {
   final MediaItem mediaItem;
+  final bool isSelectionMode;
+  final bool isSelected;
+  final Function(String)? onSelectionTap;
 
-  const MediaGridItem({super.key, required this.mediaItem});
+  const MediaGridItem({
+    super.key,
+    required this.mediaItem,
+    this.isSelectionMode = false,
+    this.isSelected = false,
+    this.onSelectionTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => _openMediaViewer(context, mediaItem),
-      onLongPress: () => _showDeleteDialog(context, mediaItem),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          color: Colors.white10,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 8,
-              offset: Offset(0, 4),
+      onTap: () {
+        if (isSelectionMode && onSelectionTap != null) {
+          onSelectionTap!(mediaItem.id);
+        } else {
+          _openMediaViewer(context, mediaItem);
+        }
+      },
+      onLongPress: isSelectionMode
+          ? null
+          : () => _showDeleteDialog(context, mediaItem),
+      child: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: Colors.white10,
+              border: isSelected
+                  ? Border.all(color: Colors.blue, width: 3)
+                  : null,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: Offset(0, 4),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: _buildMediaContent(),
-        ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: _buildMediaContent(),
+            ),
+          ),
+          // Selection indicator
+          if (isSelectionMode)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? Colors.blue
+                      : Colors.white.withOpacity(0.7),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isSelected ? Colors.blue : Colors.white,
+                    width: 2,
+                  ),
+                ),
+                child: isSelected
+                    ? Icon(Icons.check, color: Colors.white, size: 18)
+                    : null,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -74,19 +136,42 @@ class MediaGridItem extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             _buildVideoThumbnail(),
-            Positioned(
-              bottom: 4,
-              right: 4,
+            // Play button overlay
+            Center(
               child: Container(
-                padding: EdgeInsets.all(4),
+                padding: EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.7),
+                  color: Colors.black.withOpacity(0.6),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.play_arrow_rounded,
-                    color: Colors.white, size: 16),
+                child: Icon(
+                  Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: 32,
+                ),
               ),
             ),
+            // Duration badge
+            if (mediaItem.duration != null)
+              Positioned(
+                bottom: 8,
+                right: 8,
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    _formatDuration(mediaItem.duration!),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
           ],
         );
       case MediaType.document:
@@ -95,14 +180,40 @@ class MediaGridItem extends StatelessWidget {
   }
 
   Widget _buildVideoThumbnail() {
-    // In a real app, you'd generate and cache thumbnails
+    // Show generated thumbnail if available
+    if (mediaItem.thumbnailPath != null &&
+        File(mediaItem.thumbnailPath!).existsSync()) {
+      return Image.file(
+        File(mediaItem.thumbnailPath!),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return _buildVideoPlaceholder();
+        },
+      );
+    }
+
+    return _buildVideoPlaceholder();
+  }
+
+  Widget _buildVideoPlaceholder() {
     return Container(
-      color: Colors.black26,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF1E1E2E), Color(0xFF2A2A3E)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
       child: Center(
-        child: Icon(Icons.videocam_rounded,
-            color: Colors.white70, size: 40),
+        child: Icon(Icons.videocam_rounded, color: Colors.white54, size: 40),
       ),
     );
+  }
+
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes.toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
   }
 
   Widget _buildDocumentPlaceholder() {
@@ -112,8 +223,7 @@ class MediaGridItem extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.description_rounded,
-                color: Colors.white70, size: 40),
+            Icon(Icons.description_rounded, color: Colors.white70, size: 40),
             SizedBox(height: 4),
             Text(
               'DOC',
@@ -133,8 +243,11 @@ class MediaGridItem extends StatelessWidget {
     return Container(
       color: Colors.red.withOpacity(0.1),
       child: Center(
-        child: Icon(Icons.error_outline_rounded,
-            color: Colors.white54, size: 32),
+        child: Icon(
+          Icons.error_outline_rounded,
+          color: Colors.white54,
+          size: 32,
+        ),
       ),
     );
   }
@@ -160,10 +273,7 @@ class MediaGridItem extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Color(0xFF1E1E2E),
-        title: Text(
-          'Delete Media',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: Text('Delete Media', style: TextStyle(color: Colors.white)),
         content: Text(
           'Are you sure you want to delete this ${mediaItem.type.name}?',
           style: TextStyle(color: Colors.white70),
@@ -185,7 +295,7 @@ class MediaGridItem extends StatelessWidget {
     );
   }
 
-// In lib/features/folder_content/widgets/media_grid.dart - Update the delete method
+  // In lib/features/folder_content/widgets/media_grid.dart - Update the delete method
   Future<void> _deleteMedia(BuildContext context, MediaItem mediaItem) async {
     try {
       final mediaProvider = Provider.of<MediaProvider>(context, listen: false);

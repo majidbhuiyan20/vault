@@ -37,7 +37,7 @@ class _CreateFolderDialogState extends State<CreateFolderDialog> {
   ColorOption _findMatchingColorOption(HomeCategory folder) {
     final homeProvider = Provider.of<HomeProvider>(context, listen: false);
     final matchingOption = homeProvider.colorOptions.firstWhere(
-          (option) => option.color.value == folder.color.value,
+      (option) => option.color.value == folder.color.value,
       orElse: () => homeProvider.colorOptions[4], // Fallback to purple
     );
     return matchingOption;
@@ -184,8 +184,8 @@ class _CreateFolderDialogState extends State<CreateFolderDialog> {
         ),
         child: isSelected
             ? Center(
-          child: Icon(Icons.check_rounded, color: Colors.white, size: 20),
-        )
+                child: Icon(Icons.check_rounded, color: Colors.white, size: 20),
+              )
             : SizedBox(),
       ),
     );

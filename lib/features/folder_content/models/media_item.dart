@@ -1,6 +1,4 @@
 // lib/features/folder_content/models/media_item.dart
-import 'package:flutter/foundation.dart';
-
 enum MediaType { image, video, document }
 
 class MediaItem {
@@ -12,6 +10,7 @@ class MediaItem {
   final String folderId;
   final int fileSize;
   final Duration? duration;
+  final String? thumbnailPath; // Add thumbnail path for videos
 
   MediaItem({
     required this.id,
@@ -22,6 +21,7 @@ class MediaItem {
     required this.folderId,
     this.fileSize = 0,
     this.duration,
+    this.thumbnailPath,
   });
 
   Map<String, dynamic> toJson() {
@@ -34,6 +34,7 @@ class MediaItem {
       'folderId': folderId,
       'fileSize': fileSize,
       'duration': duration?.inMilliseconds,
+      'thumbnailPath': thumbnailPath,
     };
   }
 
@@ -49,6 +50,7 @@ class MediaItem {
       duration: json['duration'] != null
           ? Duration(milliseconds: json['duration'])
           : null,
+      thumbnailPath: json['thumbnailPath'],
     );
   }
 

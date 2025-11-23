@@ -16,6 +16,9 @@ class FolderContentScreen extends StatefulWidget {
 }
 
 class _FolderContentScreenState extends State<FolderContentScreen> {
+  bool _isSelectionMode = false;
+  final Set<String> _selectedItems = {};
+
   @override
   void initState() {
     super.initState();
@@ -30,6 +33,134 @@ class _FolderContentScreenState extends State<FolderContentScreen> {
     mediaProvider.loadMediaForFolder(widget.category.id);
   }
 
+  void _toggleSelectionMode() {
+    setState(() {
+      _isSelectionMode = !_isSelectionMode;
+      if (!_isSelectionMode) {
+        _selectedItems.clear();
+      }
+    });
+  }
+
+  void _toggleItemSelection(String itemId) {
+    setState(() {
+      if (_selectedItems.contains(itemId)) {
+        _selectedItems.remove(itemId);
+      } else {
+        _selectedItems.add(itemId);
+      }
+    });
+  }
+
+  void _selectAll() {
+    final mediaProvider = Provider.of<MediaProvider>(context, listen: false);
+    final mediaItems = mediaProvider.getMediaForFolder(widget.category.id);
+    setState(() {
+      _selectedItems.clear();
+      _selectedItems.addAll(mediaItems.map((item) => item.id));
+    });
+  }
+
+  void _deselectAll() {
+    setState(() {
+      _selectedItems.clear();
+    });
+  }
+
+  Future<void> _deleteSelected() async {
+    if (_selectedItems.isEmpty) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Color(0xFF1E1E2E),
+        title: Text('Delete Items', style: TextStyle(color: Colors.white)),
+        content: Text(
+          'Are you sure you want to delete ${_selectedItems.length} item(s)?',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: TextStyle(color: Colors.white70)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final mediaProvider = Provider.of<MediaProvider>(context, listen: false);
+      await mediaProvider.deleteMultipleMediaItems(
+        _selectedItems.toList(),
+        context,
+      );
+
+      setState(() {
+        _selectedItems.clear();
+        _isSelectionMode = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Items deleted successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  Future<void> _restoreSelected() async {
+    if (_selectedItems.isEmpty) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Color(0xFF1E1E2E),
+        title: Text('Restore Items', style: TextStyle(color: Colors.white)),
+        content: Text(
+          'Restore ${_selectedItems.length} item(s) to gallery?',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: TextStyle(color: Colors.white70)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Restore', style: TextStyle(color: Colors.green)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final mediaProvider = Provider.of<MediaProvider>(context, listen: false);
+      final results = await mediaProvider.restoreMultipleMediaItems(
+        _selectedItems.toList(),
+        context,
+      );
+
+      final successCount = results.where((r) => r).length;
+
+      setState(() {
+        _selectedItems.clear();
+        _isSelectionMode = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$successCount item(s) restored to gallery'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -41,23 +172,91 @@ class _FolderContentScreenState extends State<FolderContentScreen> {
           icon: Icon(Icons.arrow_back_rounded, color: Colors.white70),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
-          widget.category.title,
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.add_rounded, color: Colors.white70),
-            onPressed: _showMediaPicker,
-          ),
-        ],
+        title: _isSelectionMode
+            ? Text(
+                '${_selectedItems.length} selected',
+                style: TextStyle(color: Colors.white, fontSize: 18),
+              )
+            : Consumer<MediaProvider>(
+                builder: (context, mediaProvider, child) {
+                  final itemCount = mediaProvider.getFolderItemCount(
+                    widget.category.id,
+                  );
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.category.title,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
+                      Text(
+                        '$itemCount items',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                    ],
+                  );
+                },
+              ),
+        actions: _isSelectionMode
+            ? [
+                // Select All / Deselect All
+                IconButton(
+                  icon: Icon(
+                    _selectedItems.length ==
+                            Provider.of<MediaProvider>(
+                              context,
+                            ).getMediaForFolder(widget.category.id).length
+                        ? Icons.deselect
+                        : Icons.select_all,
+                    color: Colors.white70,
+                  ),
+                  onPressed:
+                      _selectedItems.length ==
+                          Provider.of<MediaProvider>(
+                            context,
+                            listen: false,
+                          ).getMediaForFolder(widget.category.id).length
+                      ? _deselectAll
+                      : _selectAll,
+                ),
+                // Restore
+                IconButton(
+                  icon: Icon(Icons.restore_rounded, color: Colors.green),
+                  onPressed: _selectedItems.isEmpty ? null : _restoreSelected,
+                ),
+                // Delete
+                IconButton(
+                  icon: Icon(Icons.delete_rounded, color: Colors.red),
+                  onPressed: _selectedItems.isEmpty ? null : _deleteSelected,
+                ),
+                // Cancel Selection
+                IconButton(
+                  icon: Icon(Icons.close_rounded, color: Colors.white70),
+                  onPressed: _toggleSelectionMode,
+                ),
+              ]
+            : [
+                // Selection Mode Toggle
+                IconButton(
+                  icon: Icon(Icons.checklist_rounded, color: Colors.white70),
+                  onPressed: _toggleSelectionMode,
+                ),
+                // Add Media
+                IconButton(
+                  icon: Icon(Icons.add_rounded, color: Colors.white70),
+                  onPressed: _showMediaPicker,
+                ),
+              ],
       ),
       body: Consumer<MediaProvider>(
         builder: (context, mediaProvider, child) {
-          final mediaItems = mediaProvider.getMediaForFolder(widget.category.id);
+          final mediaItems = mediaProvider.getMediaForFolder(
+            widget.category.id,
+          );
 
           if (mediaProvider.mediaItems.isEmpty) {
             return _buildEmptyState();
@@ -65,14 +264,21 @@ class _FolderContentScreenState extends State<FolderContentScreen> {
 
           return mediaItems.isEmpty
               ? _buildEmptyState()
-              : MediaGrid(mediaItems: mediaItems);
+              : MediaGrid(
+                  mediaItems: mediaItems,
+                  isSelectionMode: _isSelectionMode,
+                  selectedItems: _selectedItems,
+                  onItemTap: _toggleItemSelection,
+                );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showMediaPicker,
-        backgroundColor: widget.category.color,
-        child: Icon(Icons.add_rounded, color: Colors.white),
-      ),
+      floatingActionButton: _isSelectionMode
+          ? null
+          : FloatingActionButton(
+              onPressed: _showMediaPicker,
+              backgroundColor: widget.category.color,
+              child: Icon(Icons.add_rounded, color: Colors.white),
+            ),
     );
   }
 
@@ -91,27 +297,17 @@ class _FolderContentScreenState extends State<FolderContentScreen> {
               ),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              widget.category.icon,
-              size: 60,
-              color: Colors.white,
-            ),
+            child: Icon(widget.category.icon, size: 60, color: Colors.white),
           ),
           SizedBox(height: 20),
           Text(
             'No ${widget.category.title.toLowerCase()} yet',
-            style: TextStyle(
-              color: Colors.white54,
-              fontSize: 18,
-            ),
+            style: TextStyle(color: Colors.white54, fontSize: 18),
           ),
           SizedBox(height: 10),
           Text(
             'Tap + to add your first item',
-            style: TextStyle(
-              color: Colors.white38,
-              fontSize: 14,
-            ),
+            style: TextStyle(color: Colors.white38, fontSize: 14),
           ),
         ],
       ),
@@ -123,7 +319,8 @@ class _FolderContentScreenState extends State<FolderContentScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => MediaPickerBottomSheet(folderId: widget.category.id),
+      builder: (context) =>
+          MediaPickerBottomSheet(folderId: widget.category.id),
     );
   }
 }

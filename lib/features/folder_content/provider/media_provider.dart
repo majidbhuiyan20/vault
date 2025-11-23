@@ -1,9 +1,8 @@
 // lib/features/folder_content/provider/media_provider.dart
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/src/widgets/framework.dart';
+import 'package:flutter/widgets.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:provider/provider.dart';
 import '../../home/provider/home_provider.dart';
 import '../models/media_item.dart';
 import '../service/media_storage_service.dart';
@@ -16,24 +15,51 @@ class MediaProvider with ChangeNotifier {
   List<MediaItem> get mediaItems => List.unmodifiable(_mediaItems);
   bool get isEmpty => _mediaItems.isEmpty;
 
-  MediaProvider(this._storageService);
+  MediaProvider(this._storageService) {
+    _loadAllMedia();
+  }
 
-  void setHomeProvider(HomeProvider homeProvider) => _homeProvider = homeProvider;
+  void setHomeProvider(HomeProvider homeProvider) {
+    _homeProvider = homeProvider;
+    // Schedule sync after the current build is complete
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncFolderCounts();
+    });
+  }
+
+  // Load all media items on initialization
+  Future<void> _loadAllMedia() async {
+    try {
+      final allItems = await _storageService.loadAllMediaItems();
+      _mediaItems.clear();
+      _mediaItems.addAll(allItems);
+      _syncFolderCounts();
+      notifyListeners();
+      debugPrint('✅ Loaded ${_mediaItems.length} media items on startup');
+    } catch (e) {
+      debugPrint('Error loading all media: $e');
+    }
+  }
 
   Future<void> loadMediaForFolder(String folderId) async {
     try {
-      final items = await _storageService.loadMediaItems(folderId);
+      // Reload all media items to ensure we have the latest data
+      final allItems = await _storageService.loadAllMediaItems();
       _mediaItems.clear();
-      _mediaItems.addAll(items);
+      _mediaItems.addAll(allItems);
       _syncFolderCounts();
       notifyListeners();
+      debugPrint('✅ Reloaded ${_mediaItems.length} total media items');
     } catch (e) {
       debugPrint('Error loading media: $e');
     }
   }
 
   // Add image from gallery
-  Future<void> addImageFromGallery(String folderId, BuildContext context) async {
+  Future<void> addImageFromGallery(
+    String folderId,
+    BuildContext context,
+  ) async {
     try {
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(
@@ -42,7 +68,12 @@ class MediaProvider with ChangeNotifier {
       );
 
       if (image != null) {
-        await _saveMediaFile(File(image.path), folderId, MediaType.image, image.name);
+        await _saveMediaFile(
+          File(image.path),
+          folderId,
+          MediaType.image,
+          image.name,
+        );
         _syncFolderCounts();
       }
     } catch (e) {
@@ -52,15 +83,21 @@ class MediaProvider with ChangeNotifier {
   }
 
   // Add video from gallery
-  Future<void> addVideoFromGallery(String folderId, BuildContext context) async {
+  Future<void> addVideoFromGallery(
+    String folderId,
+    BuildContext context,
+  ) async {
     try {
       final ImagePicker picker = ImagePicker();
-      final XFile? video = await picker.pickVideo(
-        source: ImageSource.gallery,
-      );
+      final XFile? video = await picker.pickVideo(source: ImageSource.gallery);
 
       if (video != null) {
-        await _saveMediaFile(File(video.path), folderId, MediaType.video, video.name);
+        await _saveMediaFile(
+          File(video.path),
+          folderId,
+          MediaType.video,
+          video.name,
+        );
         _syncFolderCounts();
       }
     } catch (e) {
@@ -79,7 +116,12 @@ class MediaProvider with ChangeNotifier {
       );
 
       if (image != null) {
-        await _saveMediaFile(File(image.path), folderId, MediaType.image, image.name);
+        await _saveMediaFile(
+          File(image.path),
+          folderId,
+          MediaType.image,
+          image.name,
+        );
         _syncFolderCounts();
       }
     } catch (e) {
@@ -89,7 +131,12 @@ class MediaProvider with ChangeNotifier {
   }
 
   // Save media file to secure storage
-  Future<void> _saveMediaFile(File file, String folderId, MediaType type, String fileName) async {
+  Future<void> _saveMediaFile(
+    File file,
+    String folderId,
+    MediaType type,
+    String fileName,
+  ) async {
     try {
       final mediaItem = await _storageService.saveMediaFile(
         file,
@@ -120,6 +167,65 @@ class MediaProvider with ChangeNotifier {
     }
   }
 
+  // Delete multiple media items
+  Future<void> deleteMultipleMediaItems(
+    List<String> mediaIds,
+    BuildContext context,
+  ) async {
+    try {
+      final itemsToDelete = _mediaItems
+          .where((item) => mediaIds.contains(item.id))
+          .toList();
+
+      await _storageService.deleteMultipleMediaFiles(itemsToDelete);
+      _mediaItems.removeWhere((item) => mediaIds.contains(item.id));
+      _syncFolderCounts();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error deleting multiple media: $e');
+      rethrow;
+    }
+  }
+
+  // Restore media item to gallery
+  Future<bool> restoreMediaItem(String mediaId, BuildContext context) async {
+    try {
+      final mediaItem = _mediaItems.firstWhere((item) => item.id == mediaId);
+      final success = await _storageService.restoreMediaToGallery(mediaItem);
+
+      if (success) {
+        // Don't delete from app, just notify success
+        debugPrint('✅ Media restored to gallery: ${mediaItem.name}');
+      }
+
+      return success;
+    } catch (e) {
+      debugPrint('Error restoring media: $e');
+      return false;
+    }
+  }
+
+  // Restore multiple media items to gallery
+  Future<List<bool>> restoreMultipleMediaItems(
+    List<String> mediaIds,
+    BuildContext context,
+  ) async {
+    try {
+      final itemsToRestore = _mediaItems
+          .where((item) => mediaIds.contains(item.id))
+          .toList();
+
+      final results = await _storageService.restoreMultipleMediaToGallery(
+        itemsToRestore,
+      );
+
+      return results;
+    } catch (e) {
+      debugPrint('Error restoring multiple media: $e');
+      return [];
+    }
+  }
+
   // Sync folder counts with HomeProvider
   void _syncFolderCounts() {
     final homeProvider = _homeProvider;
@@ -128,7 +234,11 @@ class MediaProvider with ChangeNotifier {
     // Calculate counts for each folder
     final Map<String, int> folderCounts = {};
     for (var item in _mediaItems) {
-      folderCounts.update(item.folderId, (value) => value + 1, ifAbsent: () => 1);
+      folderCounts.update(
+        item.folderId,
+        (value) => value + 1,
+        ifAbsent: () => 1,
+      );
     }
 
     // Update individual folder counts

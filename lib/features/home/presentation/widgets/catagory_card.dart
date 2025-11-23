@@ -25,7 +25,8 @@ class CategoryCard extends StatelessWidget {
     return Consumer<HomeProvider>(
       builder: (context, homeProvider, child) {
         // Get the updated category with current count
-        final updatedCategory = homeProvider.getFolderById(category.id) ?? category;
+        final updatedCategory =
+            homeProvider.getFolderById(category.id) ?? category;
 
         return GestureDetector(
           onTap: onTap,
@@ -133,8 +134,11 @@ class CategoryCard extends StatelessWidget {
                         color: Colors.black.withOpacity(0.3),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.lock_rounded,
-                          color: Colors.white, size: 16),
+                      child: Icon(
+                        Icons.lock_rounded,
+                        color: Colors.white,
+                        size: 16,
+                      ),
                     ),
                   ),
               ],
@@ -143,16 +147,6 @@ class CategoryCard extends StatelessWidget {
         );
       },
     );
-  }
-
-  String _getItemCountText(int count) {
-    if (count == 0) {
-      return 'No items';
-    } else if (count == 1) {
-      return '1 item';
-    } else {
-      return '$count items';
-    }
   }
 
   Widget _buildMenuButton(BuildContext context) {

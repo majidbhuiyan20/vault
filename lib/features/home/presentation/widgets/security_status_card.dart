@@ -35,8 +35,11 @@ class SecurityStatusCard extends StatelessWidget {
                 color: Colors.green.withOpacity(0.2),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.verified_user_rounded,
-                  color: Colors.green, size: 24),
+              child: Icon(
+                Icons.verified_user_rounded,
+                color: Colors.green,
+                size: 24,
+              ),
             ),
             SizedBox(width: 12),
             Expanded(
@@ -54,10 +57,7 @@ class SecurityStatusCard extends StatelessWidget {
                   SizedBox(height: 4),
                   Text(
                     '$totalItems items • 256-bit encryption',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(color: Colors.white70, fontSize: 14),
                   ),
                 ],
               ),
